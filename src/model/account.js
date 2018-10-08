@@ -1,9 +1,13 @@
 'use strict';
 
 const mongoose = require('mongoose');
-const crypto = require('crypto'); // Vinicio - Random bytes
-const jsonWebToken = require('jsonwebtoken'); // Vinicio - crypto
-const bcrypt = require('bcrypt'); // Vinicio - hashing
+const crypto = require('crypto');
+const jsonWebToken = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const HttpError = require('http-errors');
+
+const HASH_ROUNDS = 8;
+
 
 const accountSchema = mongoose.Schema({
   username: {
@@ -30,14 +34,10 @@ const accountSchema = mongoose.Schema({
 const TOKEN_SEED_LENGTH = 128;
 
 function pCreateToken() {
-  // Vinicio - the value of this in this function is equal to the specific
-  // object we are working with
   this.tokenSeed = crypto.randomBytes(TOKEN_SEED_LENGTH).toString('hex');
-  // Vinicio - at this point, token seed is a random, 'unique', long string
+
   return this.save()
     .then((savedAccount) => {
-      // Vinicio - at this point, we KNOW the tokenSeed was unique
-      // Vinicio - sign, in this context, means encrypt
       return jsonWebToken.sign({
         tokenSeed: savedAccount.tokenSeed,
       }, process.env.SECRET);
@@ -46,12 +46,22 @@ function pCreateToken() {
       throw error;
     });
 }
-// Vinicio - adding pCreateToken to the account's prototype
+
+function pVerifyPassword(password) {
+  return bcrypt.compare(password, this.passwordHash)
+    .then((compareResult) => {
+      if (!compareResult) {
+        throw new HttpError(401, 'Unauthorized');
+      }
+      return this;
+    })
+    .catch(console.error);
+}
+
 accountSchema.methods.pCreateToken = pCreateToken;
+accountSchema.methods.pVerifyPassword = pVerifyPassword;
 const Account = module.exports = mongoose.model('account', accountSchema);
 
-// Vinicio - on a production system, this would be >=9
-const HASH_ROUNDS = 8;
 
 Account.create = (username, email, password) => {
   return bcrypt.hash(password, HASH_ROUNDS)

@@ -6,7 +6,7 @@
   "directories": {
     "lib": "lib"
   },
-  "engines" : {
+  "engines": {
     "node": "10.8.0"
   },
   "scripts": {
